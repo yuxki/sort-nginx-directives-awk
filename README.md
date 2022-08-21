@@ -2,7 +2,7 @@
 Sort nginx directives by their contexts.
 
 ## Usage
-Audit that see if all server context has proxy_ssl_trusted_certificate directive.
+Can audit that see if all server context has the proxy_ssl_trusted_certificate directive.
 
 ```
 awk -f sort-nginx-directives.awk nginx.conf
@@ -21,7 +21,7 @@ awk -f sort-nginx-directives.awk nginx.conf
 
 ## Descriptions
 ### Input
-nginx configurations.
+nginx configurations is input file.
 
 ```
 # sample.conf
@@ -52,7 +52,7 @@ http {
 ```
 
 ### Output
-Colon delimited format
+Output is sorted nginx directives by their contexts and that formated by colon delimiter.
 ```
 Context Declared Order:   Context Depth: Directives
                      1: "main" "events": worker_connections 1024;
