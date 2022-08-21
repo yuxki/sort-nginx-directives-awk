@@ -1,20 +1,34 @@
 version: 2.1
 jobs:
   Unit-Test:
-    docker:
-      - image: ubuntu:focal
-    steps:
-      - run:
-          name: Install gawk and git
-          command: |
-            apt update && apt -y install gawk
-      - checkout
-      - run:
-          name: Run Unit Tests
-          command: |
-            ./tests/test.sh gawk
-            ./tests/test.sh nawk
-            ./tests/test.sh mawk
+    cmd_support_test:
+      docker:
+        - image: ubuntu:focal
+      steps:
+        - run:
+            name: Install gawk
+            command: |
+              apt update && apt -y install gawk
+        - checkout
+        - run:
+            name: Run Unit Tests
+            command: |
+              ./tests/test.sh gawk
+              ./tests/test.sh nawk
+              ./tests/test.sh mawk
+    image_support_test:
+      docker:
+        - image: nginx:1.23.1-alpine
+      steps:
+        - run:
+            name: Install git
+            command: |
+              apk add git
+        - checkout
+        - run:
+            name: Run Unit Test
+            command: |
+              ./tests/test.sh awk
 workflows:
   unit_test:
     jobs:
