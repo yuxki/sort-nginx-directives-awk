@@ -33,7 +33,7 @@
 #
 #  - Output
 #    - colon delimited format
-#      Context Declared Order: Context Depth: Direcitves
+#      Context Declared Order: Context Depth: Directives
 #
 #    - Example:
 #      --------------------------------------------------------------------------------------------
