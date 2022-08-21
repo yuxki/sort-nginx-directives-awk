@@ -16,6 +16,7 @@ if [ "$expect_err" != "$result_err" ]; then
   echo "[ERROR]: Expected error has not been emmited. Expected \"$expect_err\" but \"$result_err\""
   exit 1
 else
+  echo "Pass $awk test."
   exit 0
 fi
 
