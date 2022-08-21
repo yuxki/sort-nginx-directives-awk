@@ -53,6 +53,7 @@
 #    - gawk
 #    - nawk
 #    - mawk
+#    - busybox
 #
 #  - Usage
 #    - Audit that see if all server context has proxy_ssl_trusted_certificate directive.
@@ -119,8 +120,11 @@ BEGIN {
 
   # Prepare Sorting -------------------------------------------------------------------------------
   # map "\\" to the SHA256 hash
-  gsub(/\\\\/, safeHash(bSlashsSha), conf)
-  str2ShaMaps[bSlashsSha] = "\\\\\\\\"
+  if (match(conf ,/\\\\/)) {
+    # to equalize each awks behaviors about "\\\\" as replacing text, map "\\" literal to
+    # 2 safeHash(bSlashsSha), and remap every safeHash(bSlashsSha) with "\" literal
+    gsub(/\\\\/, safeHash(bSlashsSha) safeHash(bSlashsSha), conf)
+  }
 
   noCmFlag = 0; noSqFlag = 0; noDqFlag = 0;
   do {
@@ -197,7 +201,7 @@ BEGIN {
       continue
     }
 
-    if (match(conf, /^[^\\{;]*(\\.[^\\{;]*)*{/)) {
+    if (match(conf, /^[^\\\{;]*(\\.[^\\\{;]*)*\{/)) {
       coStr = substr(conf, RSTART, RLENGTH - 1)
       sub(/ *$/, "", coStr)
       sp += 1
@@ -260,9 +264,12 @@ function remapSha2Str(STR, STR_SHA_MAPS,
   str = STR
 
   for (sha in STR_SHA_MAPS){
-    if (match(str, shaPrefix))
+    if (match(str, shaPrefix)) {
       gsub(safeHash(sha), STR_SHA_MAPS[sha], str)
+    }
   }
+  if (match(str, shaPrefix))
+    gsub(safeHash(bSlashsSha), "\\", str)
 
   return str
 }
