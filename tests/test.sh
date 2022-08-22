@@ -9,11 +9,11 @@ if [ "$expect" != "$result" ]; then
   exit 1
 fi
 
-expect_err="[ERROR] sort-nginx-directives.awk: sort-nginx-directives@101ead936a2281d53dcc064b7e2a2ab0d53b92ef3ef7b34b668673007895c860 in the configuration will cause unexpected behavior for this program."
+expect_err="[ERROR] sort-nginx-directives.awk: sort-nginx-directives@0-9c33b361a14a5021586ff16f1b34bcdc84f1b344d88502a943fc1762fb76c1f6 in the configuration will cause unexpected behavior for this program."
 result_err=`$awk -f sort-nginx-directives.awk tests/input-error.conf 2>&1`
 
 if [ "$expect_err" != "$result_err" ]; then
-  echo "[ERROR]: Expected error has not been emmited. Expected \"$expect_err\" but \"$result_err\""
+  echo "[ERROR]: Unexpected error has not been emmited. Expected \"$expect_err\" but \"$result_err\""
   exit 1
 else
   echo "Pass $awk test."

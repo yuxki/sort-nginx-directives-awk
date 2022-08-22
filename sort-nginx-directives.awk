@@ -46,10 +46,7 @@
 #      5:"main" "http" "server" "location /" "if ($request_method = POST)": return 405;
 #      --------------------------------------------------------------------------------------------
 #
-#  - Required
-#    - sha256sum
-#
-#  - Supported AWK
+#  - Supported AWK Language
 #    - gawk
 #    - nawk
 #    - mawk
@@ -61,10 +58,10 @@
 #         | sed -n '/"server":/p'
 #         | grep -v 'proxy_ssl_trusted_certificate'
 #
-# Version: 1.0.0
+# Version: 1.0.1
 # Author: yuxki
-# Repository:
-# Last Change: 2022/8/21
+# Repository: https://github.com/yuxki/sort-nginx-directives-awk
+# Last Change: 2022/8/22
 # License:
 # MIT License
 #
@@ -105,25 +102,33 @@ BEGIN {
   # 6   Context Closing   cc
   # ------------------------------------
   typeCm = 1; typeSq = 2; typeDq = 3; typeDi = 4;
-  bSlashsSha = "101ead936a2281d53dcc064b7e2a2ab0d53b92ef3ef7b34b668673007895c860"
-  shaPrefix = "sort-nginx-directives@"
-  shaMapPattern = shaPrefix "[0-9a-f]+"
+
+  mid = 0 # Mapping ID
+  # to protect original text in the config that equals the mapping id, put prefix to mapping id
+  midPrefix = "sort-nginx-directives@"
+  midSuffix = "-9c33b361a14a5021586ff16f1b34bcdc84f1b344d88502a943fc1762fb76c1f6"
+  midMatchReg = midPrefix "[0-9]*" midSuffix
 }
 
 {
   conf = $0
 
   # Check -----------------------------------------------------------------------------------------
-  if (match(conf, shaMapPattern)) {
+  if (match(conf, midMatchReg)) {
     throwError(substr(conf, RSTART, RLENGTH) " in the configuration will cause unexpected behavior for this program.")
   }
 
   # Prepare Sorting -------------------------------------------------------------------------------
-  # map "\\" to the SHA256 hash
+  # map "\\" to the mapping id
   if (match(conf ,/\\\\/)) {
+    mid +=1
+    bSlashsMid = mid
+
     # to equalize each awks behaviors about "\\\\" as replacing text, map "\\" literal to
-    # 2 safeHash(bSlashsSha), and remap every safeHash(bSlashsSha) with "\" literal
-    gsub(/\\\\/, safeHash(bSlashsSha) safeHash(bSlashsSha), conf)
+    # 2 safeMid(bSlashsMid), and remap every safeMid(bSlashsMid) with "\" literal
+    if(mapStr2Mid(str2MidMaps, "\\", bSlashsMid))
+      throwError("Mapping ID:" bSlashsMid " is already used.")
+    gsub(/\\\\/, safeMid(bSlashsMid) safeMid(bSlashsMid), conf)
   }
 
   noCmFlag = 0; noSqFlag = 0; noDqFlag = 0;
@@ -164,8 +169,11 @@ BEGIN {
     }
     else if (cuType == typeSq) {
       if (match(conf, /[^\\]'[^\\']*(\\.[^\\']*)*'/)) {
-        sha = mapStr2Sha(substr(conf, RSTART + 1, RLENGTH - 1), str2ShaMaps, typeSq)
-        sub(/[^\\]'[^\\']*(\\.[^\\']*)*'/, substr(conf, RSTART, 1) safeHash(sha), conf)
+        mid +=1
+        if(mapStr2Mid(str2MidMaps, substr(conf, RSTART + 1, RLENGTH - 1), mid))
+          throwError("Mapping ID:" mid " is already used.")
+
+        sub(/[^\\]'[^\\']*(\\.[^\\']*)*'/, substr(conf, RSTART, 1) safeMid(mid), conf)
       }
       else {
         throwError("Single quotation is not closed.")
@@ -173,8 +181,11 @@ BEGIN {
     }
     else if (cuType == typeDq) {
       if (match(conf, /[^\\]"[^\\"]*(\\.[^\\"]*)*"/)) {
-        sha = mapStr2Sha(substr(conf, RSTART + 1, RLENGTH - 1), str2ShaMaps, typeDq)
-        sub(/[^\\]"[^\\"]*(\\.[^\\"]*)*"/, substr(conf, RSTART, 1) safeHash(sha), conf)
+        mid +=1
+        if(mapStr2Mid(str2MidMaps, substr(conf, RSTART + 1, RLENGTH - 1), mid))
+          throwError("Mapping ID " mid " is already used.")
+
+        sub(/[^\\]"[^\\"]*(\\.[^\\"]*)*"/, substr(conf, RSTART, 1) safeMid(mid), conf)
       }
       else {
         throwError("Double quotation is not closed.")
@@ -225,51 +236,52 @@ BEGIN {
 # Print Results -----------------------------------------------------------------------------------
 END {
   for (i in results){
-    r = remapSha2Str(results[i], str2ShaMaps)
+    r = remapMid2Str(results[i], str2MidMaps)
     gsub(/\n/, "\\n", r)
-    if (match(conf, shaMapPattern)) {
-      throwError("Unreplaced SHA text remains.")
+    if (match(r, midMatchReg)) {
+      throwError("Unreplaced mapping id remains in " r)
     }
     print r
   }
 }
 
 # Functions ---------------------------------------------------------------------------------------
-# to protect original SHA texts in the config, put prefix to mapped SHA256 hash text
-function safeHash(SHA){
-  return shaPrefix SHA
+function safeId(SAFE_PREFIX, ID, SAFE_SUFFIX) {
+  return SAFE_PREFIX ID SAFE_SUFFIX
 }
 
-function mapStr2Sha(STR, STR_SHA_MAPS, STR_TYPE,
-                    str, sha, command) {
-  str = STR
-  if (STR_TYPE= typeSq) {
-    gsub(/'/, "''", str)
-    sub(/^'/, "", str)
-    sub(/'$/, "", str)
+function safeMid(MID){
+  return safeId(midPrefix, MID, midSuffix)
+}
+
+function mapStr2Mid(STR_MID_MAPS, STR, MID,
+                    i) {
+  for (i in STR_MID_MAPS) {
+    if (i == MID)
+      return 1
   }
 
-  command = "echo " str  " | sha256sum"
-  command | getline
-  sha = substr($0, 1, 64)
-  close(command)
-
-  STR_SHA_MAPS[sha] = STR
-
-  return sha
+  STR_MID_MAPS[MID] = STR
+  return 0
 }
 
-function remapSha2Str(STR, STR_SHA_MAPS,
-                  str, sha) {
+function remapMid2Str(STR, STR_MID_MAPS,
+                  str, mid) {
   str = STR
 
-  for (sha in STR_SHA_MAPS){
-    if (match(str, shaPrefix)) {
-      gsub(safeHash(sha), STR_SHA_MAPS[sha], str)
+  for (mid in STR_MID_MAPS){
+    # not remap mapping id first, because the it can be in the other mapped string
+    if (mid == bSlashsMid)
+      continue
+    if (match(str, midMatchReg)) {
+      gsub(safeMid(mid), STR_MID_MAPS[mid], str)
     }
   }
-  if (match(str, shaPrefix))
-    gsub(safeHash(bSlashsSha), "\\", str)
+
+  if(bSlashsMid) {
+    if (match(str, midMatchReg))
+      gsub(safeMid(bSlashsMid), STR_MID_MAPS[bSlashsMid], str)
+  }
 
   return str
 }

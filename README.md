@@ -10,10 +10,7 @@ awk -f sort-nginx-directives.awk nginx.conf
  | grep -v 'proxy_ssl_trusted_certificate'
 ```
 
-## Required
-- sha256sum command
-
-## Supported AWK
+## Supported AWK Language
 - gawk
 - nawk
 - mawk
