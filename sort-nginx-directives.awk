@@ -90,6 +90,155 @@ BEGIN {
   RS = "\f"
   FS = "\f"
 
+  # not to use global variable, use associative array like class
+  costructMidAr(midAr) # Mapping ID
+}
+
+{
+  conf = $0
+
+  # Check -----------------------------------------------------------------------------------------
+  if (match(conf, getMatchReg(midAr))) {
+    throwError(substr(conf, RSTART, RLENGTH) " in the configuration will cause unexpected behavior for this program.")
+  }
+
+  # Prepare Sorting -------------------------------------------------------------------------------
+  conf = prepareSort(conf, str2MidMaps, midAr)
+  gsub(/\n/, "", conf)
+
+  # Do Sorting ------------------------------------------------------------------------------------
+  sp = 0; rIdx = 1; coOrder = 1
+  coStack[sp] = "\"main\""  # context opening stack
+  diStack[sp] = ""          # directive statck
+  orStack[sp] = 0           # context declare order stack
+
+  while (1)  {
+    sub(/^( |\t)*/ , "", conf)
+
+    if (match(conf, /^}/)) {
+      results[rIdx++] = orStack[sp] ":" coStack[sp] ":" diStack[sp]
+      diStack[sp] = ""
+      sp -= 1
+      conf = substr(conf, RSTART + RLENGTH)
+      continue
+    }
+
+    if (match(conf, /^[^\\\{;]*(\\.[^\\\{;]*)*\{/)) {
+      coStr = substr(conf, RSTART, RLENGTH - 1)
+      sub(/ *$/, "", coStr)
+      sp += 1
+      coStack[sp] = coStack[sp - 1] " \"" coStr "\""
+      orStack[sp] = coOrder++
+      conf = substr(conf, RSTART + RLENGTH)
+      continue
+    }
+
+    if (match(conf, /^[^;]+;/)) {
+      diStack[sp] = diStack[sp] " " substr(conf, RSTART, RLENGTH)
+      conf = substr(conf, RSTART + RLENGTH)
+      continue
+    }
+
+    break
+  }
+  results[0] = orStack[sp] ":" coStack[sp] ":" diStack[sp]
+}
+
+# Print Results -----------------------------------------------------------------------------------
+END {
+  for (i in results){
+    r = remapMid2Str(results[i], midAr, str2MidMaps)
+    gsub(/\n/, "\\n", r)
+    if (match(r,  getMatchReg(midAr))) {
+      throwError("Unreplaced mapping id remains in " r)
+    }
+    print r
+  }
+}
+
+# Functions Error ---------------------------------------------------------------------------------
+function throwError(ERROR_MSG) {
+  print "[ERROR] sort-nginx-directives.awk: " ERROR_MSG | "cat 1>&2"
+  exit 1
+}
+
+function mapStr2Mid(STR_MID_MAPS, STR, MID,
+                    i) {
+  for (i in STR_MID_MAPS) {
+    if (i == MID)
+      return 1
+  }
+
+  STR_MID_MAPS[MID] = STR
+  return 0
+}
+
+# Functions:Error ---------------------------------------------------------------------------------
+function costructMidAr(MID_AR){
+  MID_AR["cuMid"] = 0
+  MID_AR["bSlashsMid"] = -1
+
+  # to protect original text in the config that equals the mapping id, put prefix to mapping id
+  MID_AR["prefix"] = "sort-nginx-directives@"
+  MID_AR["suffix"] = "-9c33b361a14a5021586ff16f1b34bcdc84f1b344d88502a943fc1762fb76c1f6"
+  MID_AR["matchReg"] = MID_AR["prefix"] "[0-9]*" MID_AR["suffix"]
+}
+
+# Functions:Mapping ID Associative Array ----------------------------------------------------------
+function getMid(MID_AR){
+  return MID_AR["cuMid"]
+}
+
+function incMid(MID_AR){
+  MID_AR["cuMid"] += 1
+  return MID_AR["cuMid"]
+}
+
+function setBsMid(MID_AR, MID){
+  MID_AR["bSlashsMid"] = MID
+}
+
+function getBsMid(MID_AR, MID){
+  return MID_AR["bSlashsMid"]
+}
+
+function getMatchReg(MID_AR) {
+  return MID_AR["prefix"] "[0-9]*" MID_AR["suffix"]
+}
+
+function safeMid(MID_AR, MID){
+  return MID_AR["prefix"] MID MID_AR["suffix"]
+}
+
+function remapMid2Str(STR, MID_AR, STR_MID_MAPS,
+                  str, mid) {
+  str = STR
+
+  for (mid in STR_MID_MAPS){
+    # not remap mapping id first, because the it can be in the other mapped string
+    if (mid == getBsMid(MID_AR))
+      continue
+    if (match(str, getMatchReg(MID_AR))) {
+      gsub(safeMid(MID_AR, mid), STR_MID_MAPS[mid], str)
+    }
+  }
+
+  if(getBsMid(MID_AR) >= 0) {
+    if (match(str, getMatchReg(MID_AR)))
+      gsub(safeMid(MID_AR, getBsMid(MID_AR)), STR_MID_MAPS[getBsMid(MID_AR)], str)
+  }
+
+  return str
+}
+
+# Functions:Sorting -------------------------------------------------------------------------------
+function prepareSort(CONF, STR_MID_MAPS, MID_AR,
+                     conf,
+                     bSlashsMid,
+                     typeCm, typeSq, typeDq,
+                     noCmFlag, noSqFlag, noDqFlag,
+                     cuType, cmRs, sqRs, dqRs, minRs) {
+
   # -----------------------------------
   # N   Type              Sufix/Prefix
   # -----------------------------------
@@ -97,38 +246,22 @@ BEGIN {
   # 1   Comment           cm
   # 2   Single Quote      sq
   # 3   Double Quote      dq
-  # 4   Directive         di
-  # 5   Context Opening   co
-  # 6   Context Closing   cc
   # ------------------------------------
-  typeCm = 1; typeSq = 2; typeDq = 3; typeDi = 4;
+  typeCm = 1; typeSq = 2; typeDq = 3
 
-  mid = 0 # Mapping ID
-  # to protect original text in the config that equals the mapping id, put prefix to mapping id
-  midPrefix = "sort-nginx-directives@"
-  midSuffix = "-9c33b361a14a5021586ff16f1b34bcdc84f1b344d88502a943fc1762fb76c1f6"
-  midMatchReg = midPrefix "[0-9]*" midSuffix
-}
+  conf = CONF
 
-{
-  conf = $0
-
-  # Check -----------------------------------------------------------------------------------------
-  if (match(conf, midMatchReg)) {
-    throwError(substr(conf, RSTART, RLENGTH) " in the configuration will cause unexpected behavior for this program.")
-  }
-
-  # Prepare Sorting -------------------------------------------------------------------------------
   # map "\\" to the mapping id
   if (match(conf ,/\\\\/)) {
-    mid +=1
-    bSlashsMid = mid
+    setBsMid(MID_AR ,incMid(MID_AR))
 
     # to equalize each awks behaviors about "\\\\" as replacing text, map "\\" literal to
-    # 2 safeMid(bSlashsMid), and remap every safeMid(bSlashsMid) with "\" literal
-    if(mapStr2Mid(str2MidMaps, "\\", bSlashsMid))
-      throwError("Mapping ID:" bSlashsMid " is already used.")
-    gsub(/\\\\/, safeMid(bSlashsMid) safeMid(bSlashsMid), conf)
+    # 2 same mapping id, and remap the every mapping id with "\" literal
+    if(mapStr2Mid(STR_MID_MAPS, "\\", getBsMid(MID_AR)))
+      throwError("Mapping ID:" getBsMid(MID_AR) " is already used.")
+    gsub(/\\\\/,
+         safeMid(MID_AR, getBsMid(MID_AR)) safeMid(MID_AR, getBsMid(MID_AR)),
+         conf)
   }
 
   noCmFlag = 0; noSqFlag = 0; noDqFlag = 0;
@@ -169,11 +302,12 @@ BEGIN {
     }
     else if (cuType == typeSq) {
       if (match(conf, /[^\\]'[^\\']*(\\.[^\\']*)*'/)) {
-        mid +=1
-        if(mapStr2Mid(str2MidMaps, substr(conf, RSTART + 1, RLENGTH - 1), mid))
-          throwError("Mapping ID:" mid " is already used.")
+        if(mapStr2Mid(STR_MID_MAPS, substr(conf, RSTART + 1, RLENGTH - 1), incMid(MID_AR)))
+          throwError("Mapping ID:" getMid(MID_AR) " is already used.")
 
-        sub(/[^\\]'[^\\']*(\\.[^\\']*)*'/, substr(conf, RSTART, 1) safeMid(mid), conf)
+        sub(/[^\\]'[^\\']*(\\.[^\\']*)*'/,
+            substr(conf, RSTART, 1) safeMid(MID_AR, getMid(MID_AR)),
+            conf)
       }
       else {
         throwError("Single quotation is not closed.")
@@ -181,11 +315,12 @@ BEGIN {
     }
     else if (cuType == typeDq) {
       if (match(conf, /[^\\]"[^\\"]*(\\.[^\\"]*)*"/)) {
-        mid +=1
-        if(mapStr2Mid(str2MidMaps, substr(conf, RSTART + 1, RLENGTH - 1), mid))
-          throwError("Mapping ID " mid " is already used.")
+        if(mapStr2Mid(STR_MID_MAPS, substr(conf, RSTART + 1, RLENGTH - 1), incMid(MID_AR)))
+          throwError("Mapping ID:" getMid(MID_AR) " is already used.")
 
-        sub(/[^\\]"[^\\"]*(\\.[^\\"]*)*"/, substr(conf, RSTART, 1) safeMid(mid), conf)
+        sub(/[^\\]"[^\\"]*(\\.[^\\"]*)*"/,
+            substr(conf, RSTART, 1) safeMid(MID_AR, getMid(MID_AR)),
+            conf)
       }
       else {
         throwError("Double quotation is not closed.")
@@ -193,100 +328,5 @@ BEGIN {
     }
   } while (cuType != 0)
 
-  gsub(/\n/, "", conf)
-
-  # Do Sorting ------------------------------------------------------------------------------------
-  sp = 0; rIdx = 1; coOrder = 1
-  coStack[sp] = "\"main\""
-  diStack[sp] = ""
-  orStack[sp] = 0
-
-  while (1)  {
-    sub(/^( |\t)*/ , "", conf)
-
-    if (match(conf, /^}/)) {
-      results[rIdx++] = orStack[sp] ":" coStack[sp] ":" diStack[sp]
-      diStack[sp] = ""
-      sp -= 1
-      conf = substr(conf, RSTART + RLENGTH)
-      continue
-    }
-
-    if (match(conf, /^[^\\\{;]*(\\.[^\\\{;]*)*\{/)) {
-      coStr = substr(conf, RSTART, RLENGTH - 1)
-      sub(/ *$/, "", coStr)
-      sp += 1
-      coStack[sp] = coStack[sp - 1] " \"" coStr "\""
-      orStack[sp] = coOrder++
-      conf = substr(conf, RSTART + RLENGTH)
-      continue
-    }
-
-    if (match(conf, /^[^;]+;/)) {
-      diStack[sp] = diStack[sp] " " substr(conf, RSTART, RLENGTH)
-      conf = substr(conf, RSTART + RLENGTH)
-      continue
-    }
-
-    break
-  }
-  results[0] = orStack[sp] ":" coStack[sp] ":" diStack[sp]
-}
-
-# Print Results -----------------------------------------------------------------------------------
-END {
-  for (i in results){
-    r = remapMid2Str(results[i], str2MidMaps)
-    gsub(/\n/, "\\n", r)
-    if (match(r, midMatchReg)) {
-      throwError("Unreplaced mapping id remains in " r)
-    }
-    print r
-  }
-}
-
-# Functions ---------------------------------------------------------------------------------------
-function safeId(SAFE_PREFIX, ID, SAFE_SUFFIX) {
-  return SAFE_PREFIX ID SAFE_SUFFIX
-}
-
-function safeMid(MID){
-  return safeId(midPrefix, MID, midSuffix)
-}
-
-function mapStr2Mid(STR_MID_MAPS, STR, MID,
-                    i) {
-  for (i in STR_MID_MAPS) {
-    if (i == MID)
-      return 1
-  }
-
-  STR_MID_MAPS[MID] = STR
-  return 0
-}
-
-function remapMid2Str(STR, STR_MID_MAPS,
-                  str, mid) {
-  str = STR
-
-  for (mid in STR_MID_MAPS){
-    # not remap mapping id first, because the it can be in the other mapped string
-    if (mid == bSlashsMid)
-      continue
-    if (match(str, midMatchReg)) {
-      gsub(safeMid(mid), STR_MID_MAPS[mid], str)
-    }
-  }
-
-  if(bSlashsMid) {
-    if (match(str, midMatchReg))
-      gsub(safeMid(bSlashsMid), STR_MID_MAPS[bSlashsMid], str)
-  }
-
-  return str
-}
-
-function throwError(ERROR_MSG) {
-  print "[ERROR] sort-nginx-directives.awk: " ERROR_MSG | "cat 1>&2"
-  exit 1
+  return conf
 }
