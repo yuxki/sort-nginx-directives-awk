@@ -27,8 +27,8 @@
 #            proxy_pass http://example.com;
 #          }
 #        }
-#        include /etc/nginx/conf.d/*.conf;
 #      }
+#      include /etc/nginx/conf.d/*.conf;
 #      --------------------------------------------------------------------------------------------
 #
 #  - Output
@@ -37,10 +37,10 @@
 #
 #    - Example:
 #      --------------------------------------------------------------------------------------------
-#      $ awk -f sort-nginx-directives.awk sample.conf | sort
-#      0:"main": user nginx; pid /var/run/nginx.pid;
+#      $ awk -f sort-nginx-directives.awk sample.conf | sort -t: -k 1,1n
+#      0:"main": user nginx; pid /var/run/nginx.pid; include /etc/nginx/conf.d/*.conf;
 #      1:"main" "events": worker_connections 1024;
-#      2:"main" "http": log_format  main  '$remote_addr \' - \n $remote_user [$time_local] "$request" '; access_log  /var/log/nginx/access.log  main; keepalive_timeout  65; include /etc/nginx/conf.d/*.conf;
+#      2:"main" "http": log_format  main  '$remote_addr \' - \n $remote_user [$time_local] "$request" '; access_log  /var/log/nginx/access.log  main; keepalive_timeout  65;
 #      3:"main" "http" "server": listen 80;
 #      4:"main" "http" "server" "location /": proxy_pass http://example.com;
 #      5:"main" "http" "server" "location /" "if ($request_method = POST)": return 405;
@@ -52,16 +52,29 @@
 #    - mawk
 #    - busybox
 #
+#  - Options
+#    - find_path_opt_include=on (default off)
+#      - When this option is "on", this program emulate the include directive with
+#        "find -type f -path 'include directive value'" command.
+#        In the above example, when 'include /etc/nginx/conf.d/*.conf;' matchs a file which
+#        contains "deny 10.0.0.0/24;", output will be follwing example.
+#        - Example:
+#        ------------------------------------------------------------------------------------------
+#        $ awk -f sort-nginx-directives.awk sample.conf | sort -t: -k 1,1n
+#        0:"main": user nginx; pid /var/run/nginx.pid; include /etc/nginx/conf.d/*.conf; deny 10.0.0.0/24;
+#        ...
+#        ------------------------------------------------------------------------------------------
+#
 #  - Usage
 #    - Audit that see if all server context has proxy_ssl_trusted_certificate directive.
 #      - awk -f sort-nginx-directives.awk nginx.conf
 #         | sed -n '/"server":/p'
 #         | grep -v 'proxy_ssl_trusted_certificate'
 #
-# Version: 1.0.1
+# Version: 1.1.0
 # Author: yuxki
 # Repository: https://github.com/yuxki/sort-nginx-directives-awk
-# Last Change: 2022/8/22
+# Last Change: 2022/8/23
 # License:
 # MIT License
 #
@@ -90,7 +103,7 @@ BEGIN {
   RS = "\f"
   FS = "\f"
 
-  # not to use global variable, use associative array like class
+  # not to use global variable, use associative array
   costructMidAr(midAr) # Mapping ID
 }
 
@@ -99,7 +112,8 @@ BEGIN {
 
   # Check -----------------------------------------------------------------------------------------
   if (match(conf, getMatchReg(midAr))) {
-    throwError(substr(conf, RSTART, RLENGTH) " in the configuration will cause unexpected behavior for this program.")
+    throwError(substr(conf, RSTART, RLENGTH) \
+                  " in the configuration will cause unexpected behavior for this program.")
   }
 
   # Prepare Sorting -------------------------------------------------------------------------------
@@ -134,8 +148,18 @@ BEGIN {
     }
 
     if (match(conf, /^[^;]+;/)) {
-      diStack[sp] = diStack[sp] " " substr(conf, RSTART, RLENGTH)
+      diStr = substr(conf, RSTART, RLENGTH)
+      diStack[sp] = diStack[sp] " " diStr
       conf = substr(conf, RSTART + RLENGTH)
+
+      if (find_path_opt_include == "on" && match(diStr, /^include( |\t)+/)) {
+        file = substr(diStr, RSTART + RLENGTH)
+        sub(/( |\t)*;$/, "", file)
+        inConf = includeByFindPathOpt(file, midAr, str2MidMaps)
+        inConf = prepareSort(inConf, str2MidMaps, midAr)
+        gsub(/\n/, "", inConf)
+        conf = inConf " " conf
+      }
       continue
     }
 
@@ -156,7 +180,7 @@ END {
   }
 }
 
-# Functions Error ---------------------------------------------------------------------------------
+# Functions ---------------------------------------------------------------------------------------
 function throwError(ERROR_MSG) {
   print "[ERROR] sort-nginx-directives.awk: " ERROR_MSG | "cat 1>&2"
   exit 1
@@ -173,7 +197,15 @@ function mapStr2Mid(STR_MID_MAPS, STR, MID,
   return 0
 }
 
-# Functions:Error ---------------------------------------------------------------------------------
+function coverBySq(STR) {
+  return "'" STR "'"
+}
+
+function isSQuoted(STR) {
+  return match(STR, /^'[^\\']*(\\.[^\\']*)*'$/)
+}
+
+# Functions:Mapping ID Associative Array ----------------------------------------------------------
 function costructMidAr(MID_AR){
   MID_AR["cuMid"] = 0
   MID_AR["bSlashsMid"] = -1
@@ -184,7 +216,6 @@ function costructMidAr(MID_AR){
   MID_AR["matchReg"] = MID_AR["prefix"] "[0-9]*" MID_AR["suffix"]
 }
 
-# Functions:Mapping ID Associative Array ----------------------------------------------------------
 function getMid(MID_AR){
   return MID_AR["cuMid"]
 }
@@ -329,4 +360,49 @@ function prepareSort(CONF, STR_MID_MAPS, MID_AR,
   } while (cuType != 0)
 
   return conf
+}
+
+function includeByFindPathOpt(INCLUDE_VALUE, MID_AR, STR_MID_MAPS,
+                              path, findCmd, files, filesStr, inConf,
+                              i) {
+  path = INCLUDE_VALUE
+
+  if (match(path, /( |\t)/))
+    throwError("Found the include direcive which has more than one arguments.")
+
+  if (match(path, /^( |\t)*$/))
+    throwError("Found the include direcive which has no argument.")
+
+  path = remapMid2Str(path, MID_AR, STR_MID_MAPS)
+
+  if (match(path, /'[^\\']*(\\.[^\\']*)*'/))
+    path = substr(path, RSTART + 1, RLENGTH - 2)
+
+  if (match(path, /"[^\\"]*(\\.[^\\"]*)*"/))
+    path = substr(path, RSTART + 1, RLENGTH - 2)
+
+  path = coverBySq(path)
+  if (! isSQuoted(path))
+    throwError("find -path option value " path " is not quoted by single quote.")
+
+  findCmd = "find -type f -path " path
+  if (system(findCmd " > /dev/null"))
+    throwError(findCmd " command failed.")
+
+  findCmd | getline filesStr
+  close(findCmd)
+
+  sub(/\n$/, "", filesStr)
+  if (filesStr == "")
+    throwError(path ": Not found.")
+
+  split(filesStr, files, "\n")
+
+  for (file in files) {
+     getline < files[file]
+     inConf = inConf $0
+     close(file)
+  }
+
+  return inConf
 }
