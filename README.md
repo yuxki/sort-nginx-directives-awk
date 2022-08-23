@@ -74,7 +74,7 @@ When this option is "on", this program emulate the include directive with "find 
 In the above example, when 'include /etc/nginx/conf.d/\.conf;' matchs a file which contains "deny 10.0.0.0/24;", output will be follwing example.
 
 ```
-$ awk -f sort-nginx-directives.awk sample.conf | sort -t: -k 1,1n
+$ awk -f sort-nginx-directives.awk sample.conf  -v find_path_opt_include=on | sort -t: -k 1,1n
 0:"main": user nginx; pid /var/run/nginx.pid; include /etc/nginx/conf.d/*.conf; deny 10.0.0.0/24;
 ...
 ```
