@@ -1,8 +1,11 @@
-0:"main": user  nginx; pid        /var/run/nginx.pid; worker_processes  auto; error_log  /var/log/nginx/error.log notice; include tests/conf.d/*.conf; include tests/conf.d/*.conf; tests/conf.d/include-mul-2.conf; deny 192.168.98.0/24; include 'tests/include-recursive.conf'; deny 10.0.0.0/16; deny 10.0.0.0/8;
+0:"main": user  nginx; pid        /var/run/nginx.pid; worker_processes  auto; error_log  /var/log/nginx/error.log notice; include ./tests/conf.d/*.conf; deny 192.168.98.0/24; deny 192.168.98.0/24;
 1:"main" "events": worker_connections      1024;
-2:"main" "http": log_format  main  '$remote_addr \' - \n $remote_user [$time_local] "$request" '                       \\'$status $body_bytes_sent # "$http_referer" '                       "$status $body_bytes_sent \" # '$http_referer'"                      '"$http_user_agent"\n                      "$http_x_forwarded_for"'; access_log  /var/log/nginx/access.log  main; keepalive_timeout  65; include "./tests/include-one.conf"; allow 10.0.0.0/24;
+2:"main" "http": log_format  main  '$remote_addr \' - \n $remote_user [$time_local] "$request" '                       \\'$status $body_bytes_sent # "$http_referer" '                       "$status $body_bytes_sent \" # '$http_referer'"                      '"$http_user_agent"\n                      "$http_x_forwarded_for"'; access_log  /var/log/nginx/access.log  main; keepalive_timeout  65; include "./tests/include-one.conf"; allow 10.0.0.0/24; include './tests/include-recursive.conf'; deny 10.0.0.0/8; include ./tests/include-server.conf;
 3:"main" "http" "server": listen 80; rewrite \""[a-z]{1,3};(.*$)" /index.php/?=$1 break;
 4:"main" "http" "server" "location /": proxy_pass http://example.com;
 5:"main" "http" "server" "location /" "if ($request_method = POST)": return 405;
-6:"main" "http" "server": listen 80 default_server;
+6:"main" "http" "server": listen 80 default_server; include ./tests/include-location.conf;
 7:"main" "http" "server" "location /example": return 404;
+8:"main" "http" "server" "location /example2": return 500;
+9:"main" "http" "server": listen 443 default_server;
+10:"main" "http" "server" "location /example3": return 404;
