@@ -12,6 +12,9 @@ jobs:
       - run:
           name: Run Unit Tests
           command: |
+            mkdir /etc/nginx/conf.d
+            cp ./tests/conf.d/* /etc/nginx/conf.d/
+            sed -i 's/include \.\/tests\/conf.d\/\*.conf;/include \/etc\/nginx\/conf.d\/*.conf;/' ./tests/sorted-output-include.txt ./tests/input-include.conf
             ./tests/test.sh gawk
             ./tests/test.sh nawk
             ./tests/test.sh mawk
@@ -27,6 +30,9 @@ jobs:
       - run:
           name: Run Unit Test
           command: |
+            rm -rf /etc/nginx/conf.d/*
+            cp ./tests/conf.d/* /etc/nginx/conf.d/
+            sed -i 's/include \.\/tests\/conf.d\/\*.conf;/include \/etc\/nginx\/conf.d\/*.conf;/' ./tests/sorted-output-include.txt ./tests/input-include.conf
             ./tests/test.sh awk
 
 workflows:
