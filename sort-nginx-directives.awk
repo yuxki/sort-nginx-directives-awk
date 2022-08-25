@@ -60,7 +60,7 @@
 #        contains "deny 10.0.0.0/24;", output will be follwing example.
 #        - Example:
 #        ------------------------------------------------------------------------------------------
-#        $ awk -f sort-nginx-directives.awk sample.conf | sort -t: -k 1,1n
+#        $ awk -f sort-nginx-directives.awk -v find_path_opt_include=on sample.conf | sort -t: -k 1,1n
 #        0:"main": user nginx; pid /var/run/nginx.pid; include /etc/nginx/conf.d/*.conf; deny 10.0.0.0/24;
 #        ...
 #        ------------------------------------------------------------------------------------------
