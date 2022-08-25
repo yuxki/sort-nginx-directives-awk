@@ -381,27 +381,48 @@ function includeByFindPathOpt(INCLUDE_VALUE, MID_AR, STR_MID_MAPS,
   if (match(path, /"[^\\"]*(\\.[^\\"]*)*"/))
     path = substr(path, RSTART + 1, RLENGTH - 2)
 
+  # startPoint = path
+  if (match(path, /[^\/]+$/)) {
+    if (RSTART == 1)
+      startPoint = "."
+    else
+      startPoint = substr(path, 1, RSTART - 1)
+
+    startPoint = coverBySq(startPoint)
+    if (! isSQuoted(startPoint))
+      throwError("find start-point " startPoint " is not quoted by single quote.")
+  }
+  else {
+    throwError(path " has no file name.")
+  }
+
   path = coverBySq(path)
   if (! isSQuoted(path))
     throwError("find -path option value " path " is not quoted by single quote.")
 
-  findCmd = "find -type f -path " path
-  if (system(findCmd " > /dev/null"))
-    throwError(findCmd " command failed.")
+  findCmd = "find " startPoint " -type f -path " path
 
-  findCmd | getline filesStr
-  close(findCmd)
+  if (match(findCmd, /^find '[^\\']*(\\.[^\\']*)*' -type f -path '[^\\']*(\\.[^\\']*)*'$/)) {
+    if (system(findCmd " > /dev/null"))
+      throwError(findCmd " command failed.")
 
-  sub(/\n$/, "", filesStr)
-  if (filesStr == "")
-    throwError(path ": Not found.")
+    findCmd | getline filesStr
+    close(findCmd)
 
-  split(filesStr, files, "\n")
+    sub(/\n$/, "", filesStr)
+    if (filesStr == "")
+      throwError(path ": Not found.")
 
-  for (file in files) {
-     getline < files[file]
-     inConf = inConf $0
-     close(file)
+    split(filesStr, files, "\n")
+
+    for (file in files) {
+       getline < files[file]
+       inConf = inConf $0
+       close(file)
+    }
+  }
+  else {
+    throwError("Unexpected command format: " "\"" findCmd "\"")
   }
 
   return inConf
