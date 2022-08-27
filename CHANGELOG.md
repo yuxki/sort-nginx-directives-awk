@@ -23,6 +23,7 @@ First release.
 - Update from using SHA by shell command to using mapping id within awk script, to avoid side effect by shell command substitution.
  
 ## [1.1.0] - 2022-08-24
+Add option update.
  
 ### Added
 - Add "find_path_opt_include" option that emulates include directive with find command.
@@ -31,6 +32,7 @@ First release.
 ### Fixed
  
 ## [1.1.1] - 2022-08-25
+Modify document update.
  
 ### Added
  
@@ -40,6 +42,7 @@ First release.
 - Modify command example in Options section.
 
 ## [1.1.2] - 2022-08-25
+Bug fix update.
  
 ### Added
  
@@ -47,3 +50,13 @@ First release.
  
 ### Fixed
 - Fix the lacking start-point of find command bug issue (#1).
+
+## [1.1.3] - 2022-08-27
+Bug fix update.
+ 
+### Added
+ 
+### Changed
+ 
+### Fixed
+- Fix the the "include file keep not to closed" issue(#2) bug.
