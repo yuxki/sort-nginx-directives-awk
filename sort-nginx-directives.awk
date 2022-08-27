@@ -71,10 +71,10 @@
 #         | sed -n '/"server":/p'
 #         | grep -v 'proxy_ssl_trusted_certificate'
 #
-# Version: 1.1.2
+# Version: 1.1.3
 # Author: yuxki
 # Repository: https://github.com/yuxki/sort-nginx-directives-awk
-# Last Change: 2022/8/25
+# Last Change: 2022/8/27
 # License:
 # MIT License
 #
@@ -418,7 +418,7 @@ function includeByFindPathOpt(INCLUDE_VALUE, MID_AR, STR_MID_MAPS,
     for (file in files) {
        getline < files[file]
        inConf = inConf $0
-       close(file)
+       close(files[file])
     }
   }
   else {
